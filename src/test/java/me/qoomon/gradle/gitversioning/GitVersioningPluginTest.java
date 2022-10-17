@@ -321,4 +321,31 @@ class GitVersioningPluginTest {
         // then
         assertThat(project.getVersion()).isEqualTo("677-SNAPSHOT");
     }
+
+    @Test
+    void apply_Issue90NullPointerWhenNoTagMatches() throws GitAPIException, IOException {
+        // given
+        Git git = Git.init().setInitialBranch("feature/fix-bug").setDirectory(projectDir.toFile()).call();
+        git.commit().setMessage("initial commit").setAllowEmpty(true).call();
+
+        Project project = ProjectBuilder.builder().withProjectDir(projectDir.toFile()).build();
+
+        project.getPluginManager().apply(GitVersioningPlugin.class);
+
+        GitVersioningPluginExtension extension = (GitVersioningPluginExtension) project.getExtensions()
+                .getByName("gitVersioning");
+
+        GitVersioningPluginConfig config = new GitVersioningPluginConfig() {{
+            describeTagPattern = "v(?<version>\\d+\\.\\d+\\.\\d+)";
+            refs.branch("feature/(?<text>.+)", patch -> {
+                patch.version = "${describe.tag.version.major:-0}.${describe.tag.version.minor.next:-0}.0-${ref.text.slug}";
+            });
+        }};
+
+        // when
+        extension.apply(config);
+
+        // then
+        assertThat(project.getVersion()).isEqualTo("0.1.0-fix-bug");
+    }
 }
